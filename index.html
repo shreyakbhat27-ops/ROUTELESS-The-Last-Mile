@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ROUTELESS AI – The Last Mile</title>
+<style>
+:root{--bg:#f4f8fb;--card:#fff;--tx:#14263a;--mut:#5b6b7b;--pri:#0b6fb8;--grn:#1e9e5a;--yel:#c98a00;--red:#d03a3a;--bd:#d6e2ec}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0e1a26;--card:#16263a;--tx:#e8f0f7;--mut:#9db0c3;--pri:#5ab0f0;--grn:#47c885;--yel:#e8b73a;--red:#f07070;--bd:#2a3f57}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.45 system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+header{position:sticky;top:0;z-index:5;background:var(--pri);color:#fff;padding:8px 12px;display:flex;gap:8px;align-items:center;justify-content:space-between}
+header b{font-size:15px}.sos{background:var(--red);color:#fff;border:0;border-radius:8px;padding:10px 14px;font-weight:700;font-size:15px}
+nav{display:flex;overflow-x:auto;gap:4px;padding:6px 8px;background:var(--card);border-bottom:1px solid var(--bd)}
+nav button{white-space:nowrap;border:0;background:none;color:var(--mut);padding:8px 10px;border-radius:8px;font-size:14px}nav button.on{background:var(--pri);color:#fff}
+main{max-width:900px;margin:auto;padding:12px}.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin:10px 0}
+h2{margin:6px 0}h3{margin:4px 0 6px}small,.mut{color:var(--mut)}label{display:block;font-size:13px;color:var(--mut);margin-top:8px}
+select,input,textarea,button.b{width:100%;padding:10px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--tx);font:inherit}
+button.b{background:var(--pri);color:#fff;border:0;margin-top:10px;font-weight:600}button.b.g{background:var(--grn)}button.b.o{background:none;color:var(--pri);border:1px solid var(--pri)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px}
+.tag{display:inline-block;padding:2px 8px;border-radius:99px;font-size:12px;color:#fff}.G{background:var(--grn)}.Y{background:var(--yel)}.R{background:var(--red)}
+.bar{height:14px;background:var(--bd);border-radius:7px;position:relative;overflow:hidden}.bar i{display:block;height:100%}
+.sim{border-left:4px solid var(--yel);background:var(--card);padding:8px;font-size:13px;margin:8px 0;color:var(--mut)}
+a.tel{display:block;text-align:center;background:var(--red);color:#fff;text-decoration:none;font-weight:700;padding:14px;border-radius:10px;margin:6px 0;font-size:18px}
+table{width:100%;border-collapse:collapse;font-size:14px}td,th{border-bottom:1px solid var(--bd);padding:5px;text-align:left}
+#modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9;overflow:auto;padding:12px}#modal>div{max-width:560px;margin:auto;background:var(--card);border-radius:12px;padding:14px}
+</style></head><body>
+<header><b>ROUTELESS AI · The Last Mile</b><button class="sos" onclick="sos(1)">🆘 EMERGENCY HELP</button></header>
+<nav id="nav"></nav><main id="app"></main>
+<div id="modal" onclick="if(event.target===this)sos(0)"><div id="mb"></div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+// ===== SIMULATED SAMPLE DATA (all fictional) =====
+const V=['Hosahalli','Kalenahalli','Bettadapura','Chikkanahalli','Maragowdanahalli'];
+const I=['Govt High School','Govt College','Private Polytechnic'];
+// stops: [name, minutes after departure, cumulative fare ₹]
+const B=[
+{id:'B01',dep:420,cap:40,occ:37,rel:.9,stops:[['Hosahalli',0,0],['Kalenahalli',20,8],['Bettadapura',35,12],['Govt College',55,20]]},
+{id:'B02',dep:435,cap:35,occ:20,rel:.85,stops:[['Chikkanahalli',0,0],['Kalenahalli',25,10],['Govt College',50,18]]},
+{id:'B03',dep:450,cap:40,occ:32,rel:.8,stops:[['Maragowdanahalli',0,0],['Hosahalli',15,6],['Govt High School',35,12]]},
+{id:'B04',dep:480,cap:30,occ:12,rel:.75,stops:[['Bettadapura',0,0],['Govt High School',20,8],['Govt College',40,15]]},
+{id:'B05',dep:495,cap:45,occ:44,rel:.7,stops:[['Hosahalli',0,0],['Chikkanahalli',20,8],['Govt College',45,18]]},
+{id:'B06',dep:465,cap:35,occ:18,rel:.85,stops:[['Maragowdanahalli',0,0],['Kalenahalli',25,10],['Private Polytechnic',50,20]]}];
+const dest=b=>b.stops[b.stops.length-1][0];
+const ix=(b,n)=>b.stops.findIndex(s=>s[0]===n);
+const t=m=>String(Math.floor(m/60)%24).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
+// 120 synthetic students (anonymous IDs), seeded so results are repeatable
+let seed=7;const rnd=()=>(seed=(seed*1103515245+12345)%2147483648)/2147483648;
+const pairs=[];B.forEach(b=>b.stops.slice(0,-1).forEach(s=>pairs.push([s[0],dest(b)])));
+const ST=Array.from({length:120},(_,i)=>{const p=pairs[Math.floor(rnd()*pairs.length)];return{id:'S'+String(i+1).padStart(3,'0'),v:p[0],d:p[1],pref:405+15*Math.floor(rnd()*7)}});
+const EM=[['112','National Emergency Response – Police, Fire, Medical','Any immediate danger or serious emergency (primary number)'],['108','Ambulance – Karnataka','Medical emergency needing an ambulance'],['1098','Child Helpline','Child in distress, unsafe or needs protection'],['101','Fire and Rescue','Fire, rescue or flooding danger']];
+const INS={'Medical emergency':['Move to a safe place if you can.','Tell a teacher, conductor or trusted adult.','Call 112, or 108 for an ambulance (Karnataka).','Say clearly where you are and what happened.','Do not attempt medical procedures beyond your training.','Follow instructions from emergency responders.'],
+'Road accident':['Move away from traffic if it is safe.','Call 112.','Share location and number of people needing help.','Inform bus operator, institution and guardian.','Do not move an injured person unless there is immediate danger.','Wait for trained responders.'],
+'Bus breakdown':['Tell the driver or conductor.','Stay in a safe place, away from the road.','Inform the transport coordinator and guardian.','Check verified alternatives in this app.','Never enter a vehicle offered by an unknown person.'],
+'Stranded / bus cancelled':['Check the next available bus.','Contact the institution or transport coordinator.','Tell your parent or guardian.','Use only verified alternatives.','Refuse rides from strangers.','If you feel unsafe, call 112.'],
+'Heavy rain / flood / road closure':['Never cross flooded roads or moving water.','Stay in a safe designated place.','Follow official local and weather advisories.','Inform guardian and institution.','Call 112 if you need urgent help.'],
+'Unsafe situation':['Go to a safe public place or trusted adult.','Tell your parent, guardian or institution.','Call 112 if in immediate danger.','Do not share personal details or live location publicly.']};
+// ===== STATE =====
+const LS=k=>{try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}};
+const SV=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+let S={tab:'home',exam:LS('rl_exam')||false,blk:LS('rl_blk')||"",dis:LS('rl_dis')||{},rain:LS('rl_rain')||false,reps:LS('rl_reps')||[],saved:LS('rl_saved')||[],guide:LS('rl_guide'),res:null,msg:''};
+// effective bus state after disruptions
+function eff(b){const d=S.dis[b.id]||{};let occ=b.occ,delay=S.rain?25:0,cancel=false;
+ if(d.type==='cancel'||d.type==='closure'||d.type==='breakdown')cancel=true;if(S.blk&&b.stops.some((x,i)=>i>0&&x[0]===S.blk))delay+=30;if(d.type==='delay')delay+=20;if(d.type==='full')occ=b.cap;if(d.type==='surge')occ=Math.min(b.cap,Math.round(b.occ*1.25));if(S.exam)occ=Math.min(b.cap,Math.round(occ*1.2));
+ return{occ,delay,cancel,free:b.cap-occ,pct:Math.round(100*occ/b.cap)}}
+const col=e=>e.cancel||e.free===0?'R':(e.delay||e.pct>=85)?'Y':'G';
+const lab={G:'Available',Y:'Delayed / limited',R:'Full / cancelled'};
+const tag=e=>`<span class="tag ${col(e)}">${lab[col(e)]}</span>`;
+const bar=(p,c)=>`<div class="bar"><i style="width:${Math.min(100,p)}%;background:var(--${c==='R'?'red':c==='Y'?'yel':'grn'})"></i></div>`;
+const sim='<div class="sim">⚠ SIMULATED DATA – prototype only. Not live bus information. Verify with your institution or transport office.</div>';
+// ===== ENGINE (rule-based weighted scoring – NOT a trained ML model) =====
+function findRoutes(from,to,arrBy,maxC){const out=[];
+ B.forEach(b=>{const a=ix(b,from),z=ix(b,to);if(a<0||z<=a)return;const e=eff(b),dep=b.dep+b.stops[a][1]+e.delay,arr=b.dep+b.stops[z][1]+e.delay,dur=arr-dep,cost=b.stops[z][2]-b.stops[a][2];
+  const ok=!e.cancel&&e.free>0&&(!arrBy||arr<=arrBy)&&(!maxC||cost<=maxC);
+  const sc=.3*Math.min(e.free/15,1)+.2*Math.max(0,1-dur/90)+.2*(maxC?Math.max(0,1-cost/maxC):.5)+.2*(e.delay?b.rel*.7:b.rel)+.1*(e.pct<85?1:.5);
+  out.push({b,e,dep,arr,dur,cost,ok,sc,why:e.cancel?'Cancelled':e.free===0?'Bus is full':arrBy&&arr>arrBy?'Arrives after required time':maxC&&cost>maxC?'Over your budget':`${e.free} seats free, ${dur} min journey, ₹${cost}, reliability ${Math.round(b.rel*100)}%${e.delay?`, delayed ${e.delay} min`:''}`})});
+ return out.sort((x,y)=>(y.ok-x.ok)||(y.sc-x.sc))}
+function match(){ // Empty Seat Rescue: greedy, never exceeds free seats
+ const free={};B.forEach(b=>free[b.id]=eff(b).free*(eff(b).cancel?0:1));const mt=[],un=[];
+ ST.forEach(s=>{let best=null;B.forEach(b=>{const a=ix(b,s.v),z=ix(b,s.d);if(a<0||z<=a||free[b.id]<1)return;if(Math.abs(b.dep+b.stops[a][1]-s.pref)>30)return;if(!best||free[b.id]>free[best.id])best=b});
+  if(best){free[best.id]--;mt.push([s,best])}else un.push(s)});return{mt,un,free}}
+function alloc(){const r=[];B.forEach(b=>{const e=eff(b);if(e.pct>=90||e.cancel){const alt=B.filter(o=>o!==b&&dest(o)===dest(b)&&!eff(o).cancel&&eff(o).free>0&&o.stops.some(s=>b.stops.some(q=>q[0]===s[0]&&s!==o.stops[o.stops.length-1]))).sort((x,y)=>eff(y).free-eff(x).free)[0];
+  const n=e.cancel?e.occ:Math.max(0,e.occ-Math.floor(b.cap*.85));
+  r.push(alt?`${b.id} is ${e.cancel?'cancelled':e.pct+'% full'}. Move up to ${Math.min(n,eff(alt).free)} students to ${alt.id} (shares the stop and destination, ${eff(alt).free} free seats). Capacity is never exceeded.${n>eff(alt).free?' Remaining '+(n-eff(alt).free)+' students need an extra service.':''}`:`${b.id}: no compatible bus has free seats – recommend an extra service.`)}
+  else if(e.pct<50)r.push(`${b.id} is only ${e.pct}% full – underused; candidate to absorb overflow from ${dest(b)} routes.`)});return r}
+// ===== UI =====
+const TABS=[['home','Home'],['route','Route Finder'],['seats','Empty Seats'],['demand','Demand'],['admin','Admin'],['sim','Disruptions'],['crisis','Exam Crisis'],['pool','Carpool'],['em','Emergency'],['off','Offline Hub']];
+function go(t){S.tab=t;S.msg='';render()}
+function render(){document.getElementById('nav').innerHTML=TABS.map(([k,n])=>`<button class="${S.tab===k?'on':''}" onclick="go('${k}')">${n}</button>`).join('');
+ const act=S.exam||S.blk||S.rain||Object.keys(S.dis).length;document.getElementById('app').innerHTML=sim+(act&&S.tab!=='crisis'?`<div class="card" style="border-color:var(--red)"><b>🚨 Disruptions active (simulated)</b><br><small>Buses, seats and routes below already reflect them.</small><button class="b" onclick="go('crisis')">Open Exam Crisis Console</button></div>`:'')+PG[S.tab]();window.scrollTo(0,0)}
+const opt=(a,s)=>a.map(x=>`<option ${x===s?'selected':''}>${x}</option>`).join('');
+const busCard=b=>{const e=eff(b);return `<div class="card"><b>${b.id}</b> ${tag(e)} <small>${b.stops[0][0]} → ${dest(b)}</small><div class="mut">Departs ${t(b.dep+e.delay)} · ${e.occ}/${b.cap} seats used (${e.free} free)</div>${bar(e.pct,col(e))}</div>`};
+const PG={
+home:()=>`<h2>Every Student Deserves a Route to Education.</h2><p>Finds buses, uses empty seats, reacts to disruptions and keeps emergency help one tap away – even offline.</p>
+<div class="grid"><div class="card"><h3>${ST.length}</h3>synthetic students</div><div class="card"><h3>${B.length}</h3>buses</div><div class="card"><h3>${B.reduce((s,b)=>s+eff(b).free*(eff(b).cancel?0:1),0)}</h3>free seats now</div></div>
+<h3>Today's bus status</h3>${B.map(busCard).join('')}
+<div class="card"><b>How decisions are made:</b> rule-based weighted scoring (seats 30%, time 20%, cost 20%, reliability 20%, safety 10%). No trained ML model or live data is used.</div>`,
+route:()=>{const r=S.res||{from:V[0],to:I[1],arr:'08:30',max:25};const L=findRoutes(r.from,r.to,r.arr?(+r.arr.slice(0,2)*60+ +r.arr.slice(3)):0,+r.max);
+ return `<h2>Smart Route Finder</h2><div class="card"><label>Starting village</label><select id="f">${opt(V,r.from)}</select><label>Destination</label><select id="t">${opt(I,r.to)}</select><label>Must arrive by</label><input id="a" type="time" value="${r.arr}"><label>Max cost (₹)</label><input id="m" type="number" value="${r.max}"><button class="b" onclick="S.res={from:f.value,to:t_.value,arr:a.value,max:m.value};render()">Find buses</button></div>`.replace('id="t"','id="t_"')+
+ (L.length?L.map((x,i)=>`<div class="card"><b>${x.ok&&i===0?'★ Recommended: ':''}${x.b.id}</b> ${tag(x.e)}<div>${t(x.dep)} → ${t(x.arr)} · ₹${x.cost} · ${x.e.free} seats free</div><small>${x.ok?'Why: ':'Not suitable: '}${x.why}</small>${x.ok?`<div class="mut">Score ${(x.sc*100).toFixed(0)}/100</div>`:''}<br><button class="b o" onclick="save('${x.b.id}','${r.from}','${r.to}')">Save for offline</button></div>`).join(''):'<div class="card">No bus serves this pair. Try another destination.</div>')+(S.msg?`<div class="card">${S.msg}</div>`:'')},
+seats:()=>{const m=match(),tot=B.reduce((s,b)=>s+(eff(b).cancel?0:eff(b).free),0);return `<h2>Empty Seat Rescue</h2><div class="card"><b>${m.mt.length}</b> of ${ST.length} student requests matched to unused seats. ${tot-m.mt.length} seats remain empty. <b>${m.un.length}</b> unmatched.</div>
+<h3>Seat allocation (cap never exceeded)</h3>${B.map(b=>{const e=eff(b);const u=m.mt.filter(x=>x[1]===b).length;return `<div class="card"><b>${b.id}</b> ${e.cancel?'(cancelled)':`+${u} matched → ${e.occ+u}/${b.cap}`}${bar(100*(e.occ+u)/b.cap,'G')}</div>`}).join('')}
+<div class="card"><h3>Smart bus allocation advice</h3>${alloc().map(x=>`<p>• ${x}</p>`).join('')||'No overcrowding detected.'}</div>
+<small>Unmatched students have no compatible bus within ±30 min of their preferred time or all compatible seats are used. IDs are anonymous.</small>`},
+demand:()=>{const d=S.dm||{day:1,ex:0,fe:0,ra:0,x:0};const dw=[.6,1.05,1,1,1.02,1.1,.7][d.day];const f=dw*(d.ex?1.25:1)*(d.fe?.6:1)*(d.ra?.85:1)*(1+d.x/100);
+ const rows=B.map(b=>({b,p:Math.round(b.occ*f)}));return `<h2>Demand Prediction</h2><div class="sim">Simulated weighted model (day, exams, festivals, rain, manual shift). Not a trained forecast.</div><div class="card"><label>Day</label><select onchange="dm({day:+this.value})">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((n,i)=>`<option value="${i}" ${d.day==i?'selected':''}>${n}</option>`).join('')}</select>
+<label><input type="checkbox" style="width:auto" ${d.ex?'checked':''} onchange="dm({ex:+this.checked})"> Exam day (+25%)</label><label><input type="checkbox" style="width:auto" ${d.fe?'checked':''} onchange="dm({fe:+this.checked})"> Festival / holiday (−40%)</label><label><input type="checkbox" style="width:auto" ${d.ra?'checked':''} onchange="dm({ra:+this.checked})"> Heavy rain (−15%)</label>
+<label>Extra demand: ${d.x}%</label><input type="range" min="-30" max="60" value="${d.x}" onchange="dm({x:+this.value})"></div>${rows.map(({b,p})=>{const c=p>b.cap?'R':p>.85*b.cap?'Y':'G';return `<div class="card"><b>${b.id}</b> ${b.stops[0][0]}→${dest(b)} <span class="tag ${c}">${p>b.cap?'High demand':p>.85*b.cap?'Near full':'OK'}</span><div class="mut">Predicted ${p} passengers / capacity ${b.cap}${p>b.cap?` – ${p-b.cap} over: add an extra service`:''}</div>${bar(100*p/b.cap,c)}</div>`}).join('')}`},
+admin:()=>{const tf=B.reduce((s,b)=>s+eff(b).free,0);return `<h2>Admin Dashboard</h2><div class="grid"><div class="card"><h3>${ST.length}</h3>students</div><div class="card"><h3>${B.length}</h3>buses</div><div class="card"><h3>${tf}</h3>seats available</div><div class="card"><h3>${S.reps.length}</h3>emergency reports</div></div>
+<div class="card"><h3>Edit bus capacity / departure</h3><label>Bus</label><select id="eb">${B.map(b=>`<option>${b.id}</option>`).join('')}</select><label>Capacity</label><input id="ec" type="number" placeholder="e.g. 40"><label>Departure</label><input id="ed" type="time"><button class="b" onclick="editBus()">Update</button>${S.msg?`<p>${S.msg}</p>`:''}</div>
+<div class="card"><h3>AI-style recommendations (rule-based)</h3>${alloc().map(x=>`<p>• ${x}</p>`).join('')||'None – all routes healthy.'}</div>
+<div class="card"><h3>Emergency reports (DEMO – stored on this device only)</h3>${reps()}</div>
+<div class="card"><small>Verified operators and local emergency contacts: none configured. Add only officially verified entries before deployment.</small></div>`},
+crisis:()=>crisisPg(),
+sim:()=>`<h2>Disruption Simulator</h2><div class="card"><label>Bus</label><select id="sb">${B.map(b=>`<option>${b.id}</option>`).join('')}</select><label>Event</label><select id="se"><option value="cancel">Bus cancellation</option><option value="breakdown">Bus breakdown (riders stranded)</option><option value="delay">Bus delay (+20 min)</option><option value="full">Bus full</option><option value="closure">Road closure</option><option value="surge">Demand surge (+25%)</option></select><button class="b" onclick="disrupt()">Apply disruption</button>
+<button class="b o" onclick="S.rain=!S.rain;SV('rl_rain',S.rain);render()">${S.rain?'Clear':'Trigger'} heavy rainfall (+25 min all buses)</button><button class="b o" onclick="resetAll()">Reset all</button></div>${S.msg||''}
+<h3>Current status</h3>${B.map(busCard).join('')}`,
+em:()=>`<h2>Emergency Assistance</h2>${emBlock()}<div class="card"><h3>Report an emergency (DEMO)</h3><div class="sim">Saved on this device only. Police, ambulance and guardians are NOT contacted. Call 112 for real help.</div><label>Category</label><select id="rc">${opt(Object.keys(INS))}</select><label>Description</label><textarea id="rd" rows="3"></textarea><label>Location (type it, or use GPS with your permission)</label><input id="rl"><button class="b o" onclick="gps()">Use my GPS location</button><label>Bus / route</label><select id="rb">${B.map(b=>`<option>${b.id}</option>`).join('')}</select><label><input id="rn" type="checkbox" style="width:auto"> Notify guardian / institution (demo only)</label><button class="b g" onclick="report()">Save demo report</button>${S.msg?`<p><b>${S.msg}</b></p>`:''}</div><div class="card"><h3>Your demo reports</h3>${reps()}</div>`,
+off:()=>{const g=S.guide;const old=g&&(Date.now()-g.ts>7*864e5);return `<h2>Offline Knowledge Hub</h2><div class="card"><button class="b g" onclick="mkpdf()">DOWNLOAD COMPLETE STUDENT GUIDE (PDF)</button><p id="pg" class="mut">${g?`Last generated ${new Date(g.ts).toLocaleString()} · v${g.v} · ${(g.size/1024).toFixed(1)} KB · Data: SIMULATED`:'Not generated yet.'}</p>${old?'<p class="tag Y">This information was downloaded earlier and may have changed. Verify current bus availability and emergency contact details before relying on it.</p>':''}<small>Needs internet once to load the PDF library. Then open the saved file from your device with any PDF reader, offline.</small></div>
+<div class="card"><h3>Saved routes</h3>${S.saved.length?S.saved.map(s=>`<p>${s}</p>`).join(''):'<small>None yet – use "Save for offline" in Route Finder.</small>'}</div><div class="card"><h3>Bus schedule</h3>${sched()}</div>${emBlock()}
+<div class="card"><h3>SMS-style template</h3><code>BUS ${V[0].slice(0,4).toUpperCase()} COLLEGE 0830</code><br><small>Preview only – no SMS gateway is connected.</small></div><small>Live seats, GPS and current disruptions do NOT work offline.</small>`}};
+const sched=()=>`<table><tr><th>Bus</th><th>Route</th><th>Dep</th><th>Cap</th></tr>${B.map(b=>`<tr><td>${b.id}</td><td>${b.stops.map(s=>s[0]).join(' → ')}</td><td>${t(b.dep)}</td><td>${b.cap}</td></tr>`).join('')}</table>`;
+const emBlock=()=>`<div class="card"><a class="tel" href="tel:112">📞 CALL 112 – Emergency</a><a class="tel" href="tel:108" style="background:var(--pri)">🚑 Ambulance 108 (Karnataka)</a><table>${EM.map(e=>`<tr><td><a href="tel:${e[0]}"><b>${e[0]}</b></a></td><td>${e[1]}<br><small>${e[2]}</small></td></tr>`).join('')}</table><small>Source: national/state helpline numbers from the project brief. Last verified: NOT YET – verify with official government sources before deployment. Local police/hospital numbers: none configured (not invented). Calls need mobile network; this site cannot dispatch services.</small></div>
+${Object.entries(INS).map(([k,v])=>`<details class="card"><summary><b>${k}</b></summary><ol>${v.map(x=>`<li>${x}</li>`).join('')}</ol></details>`).join('')}`;
+function reps(){return S.reps.length?S.reps.map((r,i)=>`<p><b>${r.c}</b> · ${r.b} · ${new Date(r.ts).toLocaleString()}<br>${r.d||'(no description)'} · ${r.l||'location not given'}<br><select onchange="S.reps[${i}].s=this.value;SV('rl_reps',S.reps)">${opt(['Reported','Under Review','Assistance Coordinated','Resolved'],r.s)}</select> <span class="tag Y">DEMO</span></p>`).join(''):'<small>No reports yet.</small>'}
+function sos(o){const m=document.getElementById('modal');if(o){document.getElementById('mb').innerHTML=`<h2>Emergency Help</h2><a class="tel" href="tel:112">📞 CALL 112</a><a class="tel" href="tel:108" style="background:var(--pri)">🚑 108 Ambulance</a><a class="tel" href="tel:1098" style="background:var(--grn)">Child Helpline 1098</a><a class="tel" href="tel:101" style="background:var(--yel)">Fire 101</a><p>Tell them your location and what happened. If safe, tell a trusted adult. <b>Even if you are late for an exam, never take a ride from a stranger and never cross flooded or blocked roads.</b> Your safety matters more than any exam.</p><button class="b o" onclick="sos(0);go('em')">Instructions and report</button><button class="b" onclick="sos(0)">Close</button>`;m.style.display='block'}else m.style.display='none'}
+function dm(o){S.dm=Object.assign({day:1,ex:0,fe:0,ra:0,x:0},S.dm,o);render()}
+function save(id,f,to){const b=B.find(x=>x.id===id);S.saved.push(`${id}: ${f} → ${to}, departs ${t(b.dep+b.stops[ix(b,f)][1])}`);S.saved=[...new Set(S.saved)];SV('rl_saved',S.saved);S.msg='Saved. Find it in Offline Hub.';render()}
+function editBus(){const b=B.find(x=>x.id===eb.value);if(+ec.value>0)b.cap=Math.max(+ec.value,b.occ);if(ed.value){const[h,m]=ed.value.split(':');b.dep=+h*60+ +m}S.msg=`${b.id} updated (capacity ${b.cap}, departs ${t(b.dep)}). Regenerate the PDF in Offline Hub. Edits reset on reload in this prototype.`;render()}
+function disrupt(){const id=sb.value,ty=se.value,b=B.find(x=>x.id===id),bef=eff(b),before=B.map(x=>eff(x));S.dis[id]={type:ty};SV('rl_dis',S.dis);
+ const e=eff(b),affected=ty==='cancel'||ty==='closure'||ty==='breakdown'?bef.occ:ty==='full'?0:ty==='delay'?bef.occ:Math.max(0,e.occ-bef.occ);
+ const alts=B.filter(o=>o!==b&&!eff(o).cancel&&eff(o).free>0&&o.stops.some(s=>b.stops.some(q=>q[0]===s[0])||s[0]===dest(b))&&dest(o)===dest(b));const fs=alts.reduce((s,o)=>s+eff(o).free,0);
+ S.msg=`<div class="card"><h3>System response</h3><p><b>Before:</b> ${id} ${lab[col(bef)]}, ${bef.occ}/${b.cap}. <b>After:</b> ${lab[col(e)]}, ${e.occ}/${b.cap}.</p><p>Affected students: <b>${affected}</b> on route ${b.stops[0][0]} → ${dest(b)}.</p><p>Alternatives to ${dest(b)}: ${alts.map(o=>`${o.id} (${eff(o).free} free, dep ${t(o.dep+eff(o).delay)})`).join(', ')||'none'}.</p><p>Recommendation: ${affected===0?'Monitor; students on this bus should plan alternatives.':fs>=affected?`Redistribute all ${affected} students across the alternatives (${fs} free seats). No bus exceeds capacity.`:`Redistribute ${fs} students; ${affected-fs} still need an extra service. Verified private/shared operators: none configured – coordinator must add verified ones. Do not accept rides from unverified people.`}</p><small>Rule-based response, simulated data.</small></div>`;render()}
+function gps(){if(!navigator.geolocation){S.msg='GPS unavailable – type your location.';return render()}navigator.geolocation.getCurrentPosition(p=>{rl.value=`${p.coords.latitude.toFixed(5)}, ${p.coords.longitude.toFixed(5)}`},()=>alert('Location not available or permission denied. Please type your location.'))}
+function report(){S.reps.unshift({c:rc.value,d:rd.value,l:rl.value,b:rb.value,n:rn.checked,s:'Reported',ts:Date.now()});SV('rl_reps',S.reps);S.msg='Demo report saved on this device. No emergency service or guardian has been contacted – call 112 for real help.';render()}
+function mkpdf(){const p=document.getElementById('pg');if(!window.jspdf){p.textContent='PDF library could not load (needs internet once).';return}
+ p.textContent='Generating… 20%';setTimeout(()=>{const d=new window.jspdf.jsPDF({unit:'mm',format:'a4'}),W=180;let y=18;
+ const add=(x,sz=11,bold)=>{d.setFontSize(sz);d.setFont('helvetica',bold?'bold':'normal');d.splitTextToSize(x,W).forEach(l=>{if(y>280){d.addPage();y=18}d.text(l,15,y);y+=sz*.45+1.5})};
+ add('ROUTELESS AI - Student Guide',20,1);add('Data status: SIMULATED. Generated '+new Date().toLocaleString()+'. Verify before relying on it.',10);y+=3;
+ add('1. How to use this guide',14,1);add('Find your village and college in the routes table. Check the bus departure time. Always confirm with your institution because seats and timings may change. This guide works offline; live seats and GPS do not.');y+=3;
+ add('2. Villages: '+V.join(', '),12);add('Institutions: '+I.join(', '),12);y+=3;
+ add('3. Bus routes and timings',14,1);B.forEach(b=>add(`${b.id} | ${b.stops.map(s=>s[0]+' '+t(b.dep+s[1])).join(' > ')} | Seats: ${b.cap} | Fare to end: Rs ${b.stops[b.stops.length-1][2]}`));y+=3;
+ add('4. EMERGENCY NUMBERS (tap or dial)',14,1);EM.forEach(e=>add(`${e[0]} - ${e[1]}: ${e[2]}`,12,1));add('Local numbers: none listed - add only officially verified ones. Last verified: not yet. Calls need mobile network.');y+=3;
+ add('5. Emergency instructions',14,1);Object.entries(INS).forEach(([k,v])=>{add(k,12,1);v.forEach((x,i)=>add(`${i+1}. ${x}`))});y+=3;
+ add('6. Using the app',14,1);add('Route Finder: pick village, college, arrival time and budget; the top result is recommended with reasons. Empty Seat Rescue: shows students matched to free seats. Last-mile rescue: when a bus is cancelled, check the Disruptions page for alternatives. Use only verified transport.');y+=3;
+ add('7. FAQ',14,1);add('Is the data live? No, it is simulated. Can the app call an ambulance? No, dial 108 or 112 yourself.');
+ const n=d.getNumberOfPages();for(let i=1;i<=n;i++){d.setPage(i);d.setFontSize(9);d.text(`Page ${i} of ${n}`,105,290,{align:'center'})}
+ p.textContent='Finalising… 80%';const bl=d.output('blob'),size=bl.size;if(window.claude)claude.use('downloads').then(dl=>{if(dl)dl.save({filename:'routeless-ai-student-guide.pdf',data:bl}).catch(()=>{});else p.innerHTML+=' Saving is not available in this view.'});
+ S.guide={ts:Date.now(),v:((S.guide&&S.guide.v)||0)+1,size};SV('rl_guide',S.guide);p.innerHTML=`✅ PDF generated – accept the save prompt to keep it. ${(size/1024).toFixed(1)} KB · v${S.guide.v} · ${new Date().toLocaleString()}`},50)}
+
+const mm=x=>{const a=x.split(':');return +a[0]*60+ +a[1]};
+function sv(){SV('rl_dis',S.dis);SV('rl_rain',S.rain);SV('rl_exam',S.exam);SV('rl_blk',S.blk)}
+function resetAll(){S.dis={};S.rain=false;S.exam=false;S.blk="";sv();render()}
+function cr(o){S.cr=Object.assign({d:'Govt College',st:'09:30',now:'07:20'},S.cr,o);render()}
+function crTrigger(){S.dis={B01:{type:'breakdown'},B05:{type:'full'},B02:{type:'delay'}};S.rain=true;S.blk='Kalenahalli';S.exam=true;sv();render()}
+function crisisPg(){const c=S.cr||{d:'Govt College',st:'09:30',now:'07:20'},st=mm(c.st),now=mm(c.now),buf=15,free={};
+ B.forEach(b=>{const e=eff(b);free[b.id]=e.cancel?0:e.free});
+ const brk=B.filter(b=>(S.dis[b.id]||{}).type==='breakdown'&&dest(b)===c.d),stuck=[];
+ brk.forEach(b=>{for(let i=0;i<b.occ;i++)stuck.push({v:b.stops[1][0],d:c.d,br:1})});
+ const pool=ST.filter(x=>x.d===c.d&&V.includes(x.v)).concat(stuck);
+ const opts=x=>B.filter(b=>{const a=ix(b,x.v),z=ix(b,x.d);return a>=0&&z>a&&free[b.id]>0&&b.dep+b.stops[a][1]+eff(b).delay>=now});
+ pool.forEach(x=>x.n=opts(x).length);pool.sort((x,y)=>x.n-y.n);
+ const r={ok:[],risk:[],miss:[],none:[]};let late=0;
+ pool.forEach(x=>{const o=opts(x).map(b=>({b,arr:b.dep+b.stops[ix(b,x.d)][1]+eff(b).delay})).sort((p,q)=>p.arr-q.arr)[0];
+  if(!o){r.none.push(x);return}free[o.b.id]--;
+  if(o.arr<=st-buf)r.ok.push(x);else if(o.arr<=st)r.risk.push(x);else{r.miss.push(x);late=Math.max(late,o.arr-st)}});
+ const bad=r.miss.length+r.none.length,left=st-now,byV={};
+ r.risk.concat(r.miss,r.none).forEach(x=>byV[x.v]=(byV[x.v]||0)+1);
+ const cond=[S.exam?'Exam day (+20% demand on all buses)':'',S.rain?'Heavy rain (+25 min)':'',S.blk?`Road blocked near ${S.blk} (+30 min detour for buses passing it)`:'',...brk.map(b=>`${b.id} broken down – ${b.occ} riders stranded`),...B.filter(b=>(S.dis[b.id]||{}).type==='full').map(b=>`${b.id} full`)].filter(Boolean);
+ const k=(n,l,cl)=>`<div class="card"><h3><span class="tag ${cl}">${n}</span></h3>${l}</div>`;
+ return `<h2>Exam Day Crisis Console</h2><div class="card"><small>Compound-failure planning: breakdown + demand surge + road blockage + time pressure. Simulated; rule-based, not a live forecast.</small>
+<label>Exam venue</label><select onchange="cr({d:this.value})">${opt(I,c.d)}</select><label>Exam starts</label><input type="time" value="${c.st}" onchange="cr({st:this.value})"><label>Current time</label><input type="time" value="${c.now}" onchange="cr({now:this.value})">
+<label><input type="checkbox" style="width:auto" ${S.exam?'checked':''} onchange="S.exam=this.checked;sv();render()"> Important exam day</label><label>Road blockage near</label><select onchange="S.blk=this.value;sv();render()"><option value="">None</option>${opt(V,S.blk)}</select>
+<button class="b" style="background:var(--red)" onclick="crTrigger()">Trigger full crisis scenario</button><button class="b o" onclick="resetAll()">Reset everything</button></div>
+<div class="card"><b>Active conditions</b>${cond.length?cond.map(x=>`<p>• ${x}</p>`).join(''):'<p class="mut">None – press the red button to simulate.</p>'}<b>${left>0?left+' min until exam starts':'Exam has started'}</b> · ${pool.length} students need to reach ${c.d} (${stuck.length} stranded riders included)</div>
+<div class="grid">${k(r.ok.length,'On track (arrive 15+ min early)','G')}${k(r.risk.length,'At risk (arrive within 15 min of start)','Y')}${k(r.miss.length,'Will arrive late','R')}${k(r.none.length,'No safe seat available','R')}</div>
+<div class="card"><h3>Consequences</h3><p>${pool.length?`<b>${bad}</b> of ${pool.length} students (${Math.round(100*bad/pool.length)}%) are unlikely to reach the exam on time, and <b>${r.risk.length}</b> more are at risk.`:'No students travel to this venue.'}${late?` The latest arrival is about <b>${late} min</b> after the start.`:''}</p>${Object.keys(byV).length?`<table><tr><th>Village / stop</th><th>Affected</th></tr>${Object.entries(byV).map(([a,n])=>`<tr><td>${a}</td><td>${n}</td></tr>`).join('')}</table>`:''}</div>
+<div class="card"><h3>Recommended actions, in order</h3><ol>
+<li><b>Safety first:</b> ${stuck.length?`${stuck.length} riders from ${brk.map(b=>b.id).join(', ')} wait at ${brk[0].stops[1][0]}: stay off the roadway with the driver/conductor; call <a href="tel:112">112</a> if anyone is in danger or hurt.`:'Keep students at safe stops; nobody should wait on or cross a blocked or flooded road.'}</li>
+<li><b>Seat allocation:</b> students with the fewest bus options are seated first; no bus goes above capacity (${B.reduce((n,b)=>n+(eff(b).cancel?0:eff(b).free),0)} free seats system-wide before allocation).</li>
+<li><b>Extra service:</b> ${r.none.length?`${r.none.length} students have no seat. The transport coordinator should arrange an extra verified bus${S.blk?' on a route avoiding '+S.blk:''}. ${poolLine(r.none)}`:'Existing seats cover everyone.'}</li>
+<li><b>Tell the institution now:</b> ${bad+r.risk.length?`request ${late?'a late-entry window of about '+Math.ceil(late/5)*5+' min or ':''}special consideration for students affected by documented transport failure. Share anonymous IDs only. The institution decides.`:'No action needed yet.'}</li>
+<li><b>Guardians:</b> notify them. Remind students: no rides from strangers, even under time pressure.</li>
+<li><b>Keep records:</b> time of breakdown, blockage and rainfall, to support late-entry requests.</li></ol>
+<small>Assumptions: breakdown riders are at the bus's second stop; students board the earliest compatible bus at or after the current time; delays are fixed estimates. Real decisions need live information from the coordinator.</small></div>
+<button class="b" onclick="sos(1)" style="background:var(--red)">🆘 EMERGENCY HELP</button>`}
+// ===== CARPOOL CONNECTOR (demo; only admin-verified offers are ever matched) =====
+S.pool=LS('rl_pool')||[];S.reqs=LS('rl_reqs')||[];
+const tmm=x=>+x.slice(0,2)*60+ +x.slice(3);
+function poolLine(L){const off=S.pool.filter(o=>o.ver).map(o=>({...o,left:o.seats}));let n=0;L.forEach(x=>{const o=off.find(o=>o.left>0&&o.v===x.v&&o.d===x.d);if(o){o.left--;n++}});const u=S.pool.filter(o=>!o.ver).length;return `Verified carpool seats on compatible routes can cover about <b>${n}</b> of them, each needing guardian approval.${u?` ${u} unverified offer(s) were NOT used.`:' No carpool offers are published yet: see the Carpool tab.'}`}
+function cpm(){const off=S.pool.map(o=>({...o,left:o.seats}));return S.reqs.map(r=>{const o=off.find(o=>o.ver&&o.left>0&&o.v===r.v&&o.d===r.d&&Math.abs(o.dep-r.time)<=45);if(o)o.left--;return{r,o}})}
+PG.pool=()=>{const m=cpm();return `<h2>Carpool Connector</h2><div class="sim">Demo only. Offers stay UNVERIFIED until an administrator marks them verified, and only verified offers are matched. No phone numbers or home addresses are collected or shown. Never get into an unverified vehicle.</div>
+<div class="card"><h3>Operator: publish a service</h3><label>Operator label (no phone number)</label><input id="xo"><label>Village</label><select id="xv">${opt(V)}</select><label>Destination</label><select id="xd">${opt(I,I[1])}</select><label>Departure</label><input id="xt" type="time" value="07:30"><label>Journey minutes</label><input id="xu" type="number" value="45"><label>Seats (registered capacity)</label><input id="xs" type="number" value="6"><label>Cost per student (₹)</label><input id="xc" type="number" value="25"><button class="b" onclick="addOffer()">Publish (unverified)</button><button class="b o" onclick="demoOffers()">Load 3 simulated demo offers</button></div>
+<h3>Offers</h3>${S.pool.map((o,i)=>`<div class="card"><b>${o.op}</b> <span class="tag ${o.ver?'G':'Y'}">${o.ver?'Verified (demo)':'Unverified'}</span><div>${o.v} → ${o.d} · dep ${t(o.dep)} · ${o.seats} seats · ₹${o.cost}/student</div><button class="b o" onclick="togV(${i})">${o.ver?'Remove verification':'Mark verified (admin demo)'}</button></div>`).join('')||'<small>No offers yet.</small>'}
+<div class="card"><h3>Student / guardian: request a ride</h3><label>Village</label><select id="yv">${opt(V)}</select><label>Destination</label><select id="yd">${opt(I,I[1])}</select><label>Preferred time</label><input id="yt" type="time" value="07:30"><label><input id="yg" type="checkbox" style="width:auto"> Guardian approves this request</label><button class="b g" onclick="addReq()">Send request</button></div>
+<h3>Requests and matching</h3>${m.map(({r,o})=>`<div class="card"><b>${r.id}</b> ${r.v} → ${r.d} at ${t(r.time)}<br>${o?`<span class="tag G">Matched</span> ${o.op}, ₹${o.cost} · ${r.ga?'Guardian approved, confirmed (demo)':'Awaiting guardian approval'}`:'<span class="tag Y">Requested</span> No verified offer with free seats yet'}</div>`).join('')||'<small>No requests yet.</small>'}`};
+function addOffer(){S.pool.push({op:xo.value||'Operator',v:xv.value,d:xd.value,dep:tmm(xt.value),dur:+xu.value||45,seats:Math.max(1,+xs.value||1),cost:+xc.value||0,ver:false});SV('rl_pool',S.pool);render()}
+function demoOffers(){[['Demo Van A (simulated)','Hosahalli',450,50,7,30],['Demo Minibus B (simulated)','Hosahalli',455,55,20,20],['Demo Van C (simulated)','Kalenahalli',470,40,7,28]].forEach(a=>S.pool.push({op:a[0],v:a[1],d:'Govt College',dep:a[2],dur:a[3],seats:a[4],cost:a[5],ver:false}));SV('rl_pool',S.pool);render()}
+function togV(i){S.pool[i].ver=!S.pool[i].ver;SV('rl_pool',S.pool);render()}
+function addReq(){S.reqs.push({id:'R'+String(S.reqs.length+1).padStart(3,'0'),v:yv.value,d:yd.value,time:tmm(yt.value),ga:yg.checked});SV('rl_reqs',S.reqs);render()}
+render();
+</script></body></html>
